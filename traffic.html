@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CityOS | Traffic Ops</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* [KEEPING YOUR EXACT STYLING] */
+        :root { --bg-color: #0b0e14; --glass-bg: rgba(15, 23, 42, 0.95); --glass-border: rgba(255, 255, 255, 0.1); --primary: #6366f1; --accent: #10b981; --danger: #ef4444; --warning: #f59e0b; --text-main: #f8fafc; --text-muted: #94a3b8; }
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: var(--bg-color); color: var(--text-main); overflow: hidden; }
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        
+        .nav-dock { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.9); border: 1px solid var(--glass-border); padding: 5px; border-radius: 12px; display: flex; gap: 5px; z-index: 100; backdrop-filter: blur(10px); }
+        .nav-btn { padding: 10px 20px; border: none; background: transparent; color: var(--text-muted); font-weight: 700; font-size: 0.8rem; cursor: pointer; border-radius: 8px; transition: 0.3s; display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .nav-btn:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-btn.active { background: var(--primary); color: white; box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4); }
+
+        .panel { position: absolute; background: var(--glass-bg); backdrop-filter: blur(24px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.6); z-index: 10; display: flex; flex-direction: column; gap: 16px; transition: 0.3s; }
+        .panel-left { top: 80px; left: 20px; bottom: 20px; width: 360px; overflow-y: auto; scrollbar-width: none; }
+        .panel-right { top: 80px; right: 20px; bottom: 20px; width: 440px; overflow-y: auto; scrollbar-width: none; }
+
+        h2 { margin: 0; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        h3 { margin: 0; font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+        input { width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: white; border-radius: 8px; box-sizing: border-box; font-family: 'Inter'; }
+        .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #4f46e5, #3b82f6); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer; text-transform: uppercase; font-size: 0.8rem; transition: 0.2s; }
+        .btn:hover { transform: translateY(-2px); }
+
+        .ai-terminal { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--primary); border-left: 4px solid var(--primary); border-radius: 6px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #e2e8f0; line-height: 1.5; margin-bottom: 10px; position: relative; }
+        .caution-text { color: var(--warning); display: block; margin-top: 6px; font-weight: bold; }
+        .danger-text { color: var(--danger); display: block; margin-top: 6px; font-weight: bold; }
+        
+        .widget-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .kpi-card { background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; text-align: center; }
+        .kpi-val { font-size: 1.5rem; font-weight: 800; color: white; }
+        .kpi-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
+
+        .traffic-ai-box { display: grid; grid-template-columns: 30px 1fr; gap: 12px; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 12px; border: 1px solid var(--glass-border); align-items: center; }
+        .pole { background: #222; padding: 5px; border-radius: 8px; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+        .light { width: 16px; height: 16px; border-radius: 50%; background: #333; transition: 0.3s; }
+        .light.red.on { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        .light.yellow.on { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
+        .light.green.on { background: #10b981; box-shadow: 0 0 10px #10b981; }
+
+        .route-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 12px; cursor: pointer; margin-bottom: 8px; transition: 0.2s; }
+        .route-card.selected { background: linear-gradient(145deg, rgba(79, 70, 229, 0.15), rgba(0,0,0,0)); border: 1px solid var(--primary); }
+        .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; float: right; margin-left: 5px; }
+        .b-fast { background: rgba(16, 185, 129, 0.2); color: var(--accent); }
+        .b-eco { background: rgba(16, 185, 129, 0.2); color: #86efac; }
+
+        .toggle-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+        .toggle-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; padding: 10px; border-radius: 8px; cursor: pointer; text-align: center; font-size: 0.7rem; font-weight: 600; }
+        .toggle-btn.active-clear { background: rgba(16, 185, 129, 0.2); color: var(--accent); border-color: var(--accent); }
+        .toggle-btn.active-rain { background: rgba(245, 158, 11, 0.2); color: var(--warning); border-color: var(--warning); }
+        .toggle-btn.active-fog { background: rgba(239, 68, 68, 0.2); color: var(--danger); border-color: var(--danger); }
+
+        .chart-box { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px; height: 160px; border: 1px solid var(--glass-border); margin-top: 10px; }
+        
+        .safety-container { display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 10px; border: 1px solid var(--glass-border); }
+        .safety-ring { width: 50px; height: 50px; border-radius: 50%; background: conic-gradient(var(--accent) 0% 100%, #333 0%); display: flex; align-items: center; justify-content: center; margin-right: 15px; }
+        .safety-inner { width: 40px; height: 40px; background: var(--bg-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="nav-dock">
+        <a href="index.html" class="nav-btn"><i class="fas fa-home"></i> HUB</a>
+        <a href="traffic.html" class="nav-btn active"><i class="fas fa-route"></i> TRAFFIC</a>
+        <a href="parking.html" class="nav-btn"><i class="fas fa-square-parking"></i> PARKING</a>
+    </div>
+
+    <div class="panel panel-left">
+        <h2><i class="fas fa-satellite-dish" style="color:var(--primary)"></i> MISSION CONTROL</h2>
+        <h3>Route Parameters</h3>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <input type="text" id="origin" placeholder="Start (e.g. Mumbai)">
+            <input type="text" id="destination" placeholder="End (e.g. Pune)">
+        </div>
+        <div style="margin-top:10px;">
+            <label style="font-size:0.65rem; color:var(--text-muted); font-weight:bold;">LIVE CONDITIONS</label>
+            <div class="toggle-group">
+                <div class="toggle-btn active-clear" id="btnClear" onclick="trafficEngine.setWeather('clear')">☀️ Clear</div>
+                <div class="toggle-btn" id="btnRain" onclick="trafficEngine.setWeather('rain')">🌧️ Rain</div>
+                <div class="toggle-btn" id="btnFog" onclick="trafficEngine.setWeather('fog')">🌫️ Fog</div>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+            <input type="number" id="mileage" value="15" placeholder="KM/L">
+            <input type="number" id="fuelPrice" value="96.5" placeholder="₹ Price">
+        </div>
+        <div class="file-upload" style="margin-top:10px; border:2px dashed rgba(255,255,255,0.1); padding:10px; text-align:center; cursor:pointer;" onclick="document.getElementById('csvInput').click()">
+            <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="trafficEngine.processCSV(this)">
+            <i class="fas fa-file-csv"></i> Load Traffic Data (CSV)
+        </div>
+        <div id="csvStatus" style="font-size:0.7rem; color:var(--accent); text-align:center; display:none; margin-top:5px;">Dataset Active</div>
+        <button class="btn" style="margin-top:10px;" onclick="trafficEngine.runAnalysis()">SCAN & STRATEGIZE</button>
+        <div id="routesList" style="margin-top:15px;"></div>
+    </div>
+
+    <div class="panel panel-right">
+        <h2><i class="fas fa-brain" style="color:var(--accent)"></i> AI INTELLIGENCE</h2>
+        <div class="ai-terminal" id="aiLog">SYSTEM READY. WAITING FOR ROUTE DATA...</div>
+        <div class="widget-row">
+            <div class="kpi-card"><div class="kpi-val" id="recTime">--:--</div><div class="kpi-label" id="recSavings">Best Departure</div></div>
+            <div class="safety-container"><div class="safety-ring" id="safetyRingBg"><div class="safety-inner" id="safetyScore">100</div></div><div style="margin-left:15px;"><div style="font-weight:700; font-size:0.9rem;">Safety</div><div style="font-size:0.65rem; color:var(--text-muted);" id="safetyDesc">Optimal</div></div></div>
+        </div>
+        <div class="traffic-ai-box" style="margin-top:10px;">
+            <div class="pole"><div id="light-red" class="light red"></div><div id="light-yellow" class="light yellow"></div><div id="light-green" class="light green on"></div></div>
+            <div style="font-family:'JetBrains Mono'; font-size:0.7rem;"><div style="color:var(--text-muted);">SIGNAL OPTIMIZER</div><div style="margin:4px 0;">DENSITY: <span id="logic-density" style="color:#fff;">LOW</span></div><div>ACTION: <span id="logic-action" style="color:var(--accent); font-weight:bold;">GREEN FLOW</span></div></div>
+        </div>
+        <div class="widget-row" style="grid-template-columns: 1fr 1fr 1fr; margin-top:10px;">
+            <div class="kpi-card" style="padding:10px;"><div class="kpi-val" id="statDist" style="font-size:1.1rem;">0 km</div><div class="kpi-label">DIST</div></div>
+            <div class="kpi-card" style="padding:10px;"><div class="kpi-val" id="statLights" style="font-size:1.1rem; color:var(--warning);">0</div><div class="kpi-label">SIGNALS</div></div>
+            <div class="kpi-card" style="padding:10px;"><div class="kpi-val" id="statCost" style="font-size:1.1rem; color:var(--accent);">₹0</div><div class="kpi-label">COST</div></div>
+        </div>
+        <h3>Congestion Trend</h3><div class="chart-box"><canvas id="trendChart"></canvas></div>
+        <h3>Route Cost Analysis</h3><div class="chart-box"><canvas id="resourceChart"></canvas></div>
+    </div>
+
+<script>
+    const GOOGLE_API_KEY = 'AIzaSyCRDIVgE8DZDEqY_lNhYmdo5rkiFXNGywI'; 
+    let tMap, tDir, tRen, resourceChart, trendChart, routePolylines = [];
+
+    function initApp() {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&callback=initMaps`;
+        script.async = true;
+        document.body.appendChild(script);
+        trafficEngine.init();
+    }
+
+    function initMaps() {
+        tMap = new google.maps.Map(document.getElementById("map"), { zoom: 12, center: { lat: 28.6139, lng: 77.2090 }, disableDefaultUI: true, styles: [{ elementType: "geometry", stylers: [{ color: "#1a1a1a" }] }, { featureType: "road", elementType: "geometry", stylers: [{ color: "#2c2c2c" }] }] });
+        tDir = new google.maps.DirectionsService();
+    }
+
+    const trafficEngine = {
+        savedRoutes: [], currentWeather: 'clear',
+        init: function() { this.initCharts(); setInterval(this.simSignal, 1000); },
+        initCharts: function() {
+            const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } } } };
+            const ctx1 = document.getElementById('trendChart').getContext('2d');
+            const grad = ctx1.createLinearGradient(0, 0, 0, 150); grad.addColorStop(0, 'rgba(99, 102, 241, 0.4)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            trendChart = new Chart(ctx1, { type: 'line', data: { labels: ["Now", "+30m", "+1h", "+2h"], datasets: [{ label: 'Density %', data: [], borderColor: '#6366f1', backgroundColor: grad, fill: true, tension: 0.4 }] }, options: opts });
+            const ctx2 = document.getElementById('resourceChart').getContext('2d');
+            resourceChart = new Chart(ctx2, { type: 'bar', data: { labels: [], datasets: [{ label: 'Base ₹', data: [], backgroundColor: '#10b981' }, { label: 'Waste ₹', data: [], backgroundColor: '#ef4444' }] }, options: { ...opts, indexAxis: 'y', scales: { x: { stacked: true, ticks: {color:'#888'} }, y: { stacked: true, ticks: {color:'#fff'} } } } });
+        },
+        processCSV: function(input) {
+            const reader = new FileReader(); reader.onload = (e) => { const rows = e.target.result.split('\n').slice(1); const data = rows.map(r => parseInt(r.split(',')[1])).filter(v => !isNaN(v)); const displayData = data.length >= 4 ? data.slice(0, 4) : [40, 65, 80, 50]; trendChart.data.datasets[0].data = displayData; trendChart.update(); document.getElementById('csvStatus').style.display = 'block'; alert("CSV Data Ingested."); }; reader.readAsText(input.files[0]);
+        },
+        runAnalysis: async function() {
+            const start = document.getElementById('origin').value; const end = document.getElementById('destination').value; if(!start || !end) return alert("Please enter locations"); document.getElementById('aiLog').innerText = "SCANNING SATELLITE DATA..."; const now = new Date(); const t1 = new Date(now.getTime() + 3600000); const t2 = new Date(now.getTime() + 7200000);
+            try { const [r0, r1, r2] = await Promise.all([this.getRoute(start, end, now), this.getRoute(start, end, t1), this.getRoute(start, end, t2)]); this.savedRoutes = r0.routes; const times = [r0, r1, r2].map(r => r.routes[0].legs[0].duration_in_traffic.value / 60); this.updateAIInsights(times, this.savedRoutes[0]); this.renderRouteList(this.savedRoutes); this.updateStats(0); this.displayRoutes(0); if(document.getElementById('csvStatus').style.display === 'none') { trendChart.data.datasets[0].data = [times[0], (times[0]+times[1])/2, times[1], times[2]]; trendChart.update(); } this.updateResourceChart(this.savedRoutes); } catch(e) { console.error(e); document.getElementById('aiLog').innerText = "ERROR: UNABLE TO CALCULATE ROUTES."; }
+        },
+        getRoute: function(origin, destination, time) { return new Promise((res, rej) => { tDir.route({ origin, destination, travelMode: 'DRIVING', drivingOptions: { departureTime: time, trafficModel: 'bestguess' }, provideRouteAlternatives: true }, (r, s) => s === 'OK' ? res(r) : rej(s)); }); },
+        updateAIInsights: function(times, bestRoute) { const log = document.getElementById('aiLog'); const minTime = Math.min(...times); const idx = times.indexOf(minTime); const savings = Math.round(times[0] - minTime); let message = `> STRATEGY GENERATED:\n`; let caution = ""; if(idx === 0) { message += "• REC: Depart Now. Traffic rising.\n"; document.getElementById('recTime').innerText = "NOW"; document.getElementById('recSavings').innerText = "Fastest"; } else { message += `• REC: Wait ${idx}h to save ${savings} mins.\n`; document.getElementById('recTime').innerText = idx === 1 ? "+1 HR" : "+2 HR"; document.getElementById('recSavings').innerText = `Save ${savings} min`; } if (this.currentWeather !== 'clear') caution += `<span class='caution-text'>⚠️ WEATHER ALERT</span>`; log.innerHTML = message + caution; },
+        renderRouteList: function(routes) { const div = document.getElementById('routesList'); div.innerHTML = ""; let wMod = this.currentWeather === 'rain' ? 1.2 : (this.currentWeather === 'fog' ? 1.4 : 1.0); const stats = routes.map(r => ({ time: r.legs[0].duration_in_traffic.value * wMod, dist: r.legs[0].distance.value })); const minTime = Math.min(...stats.map(s=>s.time)); routes.forEach((r, i) => { const mins = (r.legs[0].duration_in_traffic.value * wMod) / 60; let badge = stats[i].time === minTime ? `<span class="badge b-fast">FASTEST</span>` : ""; const card = document.createElement('div'); card.className = `route-card ${i===0?'selected':''}`; card.onclick = () => { document.querySelectorAll('.route-card').forEach(c => c.classList.remove('selected')); card.classList.add('selected'); this.displayRoutes(i); this.updateStats(i); }; card.innerHTML = `<div><div style="font-size:1.1rem; font-weight:800;">${this.formatDuration(mins)} ${badge}</div><div style="font-size:0.7rem; color:#94a3b8;">${r.summary} • ${(r.legs[0].distance.value/1000).toFixed(1)} km</div></div>`; div.appendChild(card); }); },
+        updateStats: function(idx) { const leg = this.savedRoutes[idx].legs[0]; const km = leg.distance.value / 1000; const mpg = parseFloat(document.getElementById('mileage').value) || 15; const price = parseFloat(document.getElementById('fuelPrice').value) || 96; let wMod = this.currentWeather === 'rain' ? 0.85 : (this.currentWeather === 'fog' ? 0.75 : 1.0); const cost = (((km / mpg) + ((Math.max(0, (leg.duration_in_traffic.value - leg.duration.value)/60)) * 0.02)) / wMod) * price; const lights = Math.floor(km * 0.8 + 2); document.getElementById('statDist').innerText = km.toFixed(1) + " km"; document.getElementById('statCost').innerText = "₹" + cost.toFixed(0); document.getElementById('statLights').innerText = lights; let score = this.currentWeather === 'rain' ? 80 : (this.currentWeather === 'fog' ? 60 : 100); const color = score === 100 ? "#10b981" : (score === 80 ? "#f59e0b" : "#ef4444"); document.getElementById('safetyScore').innerText = score; document.getElementById('safetyScore').style.color = color; document.getElementById('safetyDesc').innerText = score === 100 ? "Optimal" : "Caution"; document.getElementById('safetyRingBg').style.background = `conic-gradient(${color} 0% ${score}%, #333 ${score}%)`; },
+        displayRoutes: function(idx) { if(routePolylines) routePolylines.forEach(p => p.setMap(null)); routePolylines = []; this.savedRoutes.forEach((r, i) => { const polyline = new google.maps.Polyline({ path: r.overview_path, strokeColor: i === idx ? '#6366f1' : '#555', strokeOpacity: i === idx ? 1.0 : 0.5, strokeWeight: i === idx ? 6 : 4, zIndex: i === idx ? 100 : 1, map: tMap }); routePolylines.push(polyline); }); const b = new google.maps.LatLngBounds(); this.savedRoutes[idx].overview_path.forEach(p => b.extend(p)); tMap.fitBounds(b); },
+        updateResourceChart: function(routes) { const mpg = parseFloat(document.getElementById('mileage').value); const price = parseFloat(document.getElementById('fuelPrice').value); const baseC = [], wastC = [], labels = []; routes.forEach((r, i) => { const km = r.legs[0].distance.value / 1000; const delay = Math.max(0, (r.legs[0].duration_in_traffic.value - r.legs[0].duration.value)/60); baseC.push(((km/mpg)*price).toFixed(0)); wastC.push(((delay*0.02)*price).toFixed(0)); labels.push(`R${i+1}`); }); resourceChart.data.labels = labels; resourceChart.data.datasets[0].data = baseC; resourceChart.data.datasets[1].data = wastC; resourceChart.update(); },
+        setWeather: function(type) { this.currentWeather = type; document.querySelectorAll('.toggle-btn').forEach(b => { if(b.id.includes('btn')) b.className = 'toggle-btn'; }); document.getElementById(`btn${type.charAt(0).toUpperCase() + type.slice(1)}`).className = `toggle-btn active-${type}`; if(this.savedRoutes.length > 0) { this.renderRouteList(this.savedRoutes); this.updateStats(0); this.updateAIInsights([0,0,0], this.savedRoutes[0]); } },
+        formatDuration: function(mins) { const h = Math.floor(mins / 60); const m = Math.round(mins % 60); return h > 0 ? `${h}h ${m}m` : `${m}min`; },
+        simSignal: function() { let tl_time = 45; const density = Math.random() * 100; document.getElementById('logic-density').innerText = density > 70 ? "HIGH" : "LOW"; const active = document.querySelector('.light.on'); if(active && Math.random() > 0.9) { active.classList.remove('on'); if(active.classList.contains('green')) document.getElementById('light-yellow').classList.add('on'); else if(active.classList.contains('yellow')) document.getElementById('light-red').classList.add('on'); else document.getElementById('light-green').classList.add('on'); } }
+    };
+
+    window.onload = initApp;
+</script>
+</body>
+</html>

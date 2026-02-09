@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CityOS | Access Portal</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #0b0e14; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        
+        h1 { font-size: 2.5rem; margin-bottom: 40px; letter-spacing: -1px; }
+        
+        .card-container { display: flex; gap: 30px; }
+
+        .role-card {
+            width: 220px; height: 280px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.3s;
+            text-decoration: none; color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .role-card:hover { transform: translateY(-10px); background: rgba(30, 41, 59, 0.9); }
+        .role-card:hover .icon { transform: scale(1.1); }
+
+        /* User Theme */
+        .user-card:hover { border-color: #6366f1; box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2); }
+        .user-card .icon { color: #6366f1; }
+
+        /* Admin Theme */
+        .admin-card:hover { border-color: #ef4444; box-shadow: 0 20px 40px rgba(239, 68, 68, 0.2); }
+        .admin-card .icon { color: #ef4444; }
+
+        .icon { font-size: 3rem; margin-bottom: 20px; transition: 0.3s; }
+        h2 { font-size: 1.2rem; margin: 0; font-weight: 600; }
+        p { color: #94a3b8; font-size: 0.8rem; margin-top: 5px; }
+
+    </style>
+</head>
+<body>
+
+    <h1>Select Portal</h1>
+
+    <div class="card-container">
+        <a href="user_login.html" class="role-card user-card">
+            <i class="fas fa-user-astronaut icon"></i>
+            <h2>Citizen</h2>
+            <p>Traffic & Parking</p>
+        </a>
+
+        <a href="admin_login.html" class="role-card admin-card">
+            <i class="fas fa-user-shield icon"></i>
+            <h2>Admin</h2>
+            <p>System Control</p>
+        </a>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CityOS | Smart Parking</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* [KEEPING STYLES CONSISTENT WITH TRAFFIC MODULE] */
+        :root { --bg-color: #0b0e14; --glass-bg: rgba(15, 23, 42, 0.95); --glass-border: rgba(255, 255, 255, 0.1); --primary: #6366f1; --accent: #10b981; --danger: #ef4444; --warning: #f59e0b; --text-main: #f8fafc; --text-muted: #94a3b8; }
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: var(--bg-color); color: var(--text-main); overflow: hidden; }
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; filter: contrast(1.1) brightness(0.8); }
+
+        .nav-dock { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.9); border: 1px solid var(--glass-border); padding: 5px; border-radius: 12px; display: flex; gap: 5px; z-index: 100; backdrop-filter: blur(10px); }
+        .nav-btn { padding: 10px 20px; border: none; background: transparent; color: var(--text-muted); font-weight: 700; font-size: 0.8rem; cursor: pointer; border-radius: 8px; transition: 0.3s; display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .nav-btn:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-btn.active { background: var(--primary); color: white; box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4); }
+
+        .panel { position: absolute; background: var(--glass-bg); backdrop-filter: blur(24px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.6); z-index: 10; display: flex; flex-direction: column; gap: 16px; transition: 0.3s; }
+        .panel-left { top: 80px; left: 20px; bottom: 20px; width: 360px; overflow-y: auto; scrollbar-width: none; }
+        .panel-right { top: 80px; right: 20px; bottom: 20px; width: 440px; overflow-y: auto; scrollbar-width: none; }
+
+        h2 { margin: 0; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        h3 { margin: 0; font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+        
+        input, select { width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: white; border-radius: 8px; box-sizing: border-box; font-family: 'Inter'; outline: none; margin-bottom: 5px; }
+        select { cursor: pointer; } option { background: #0f172a; }
+        .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer; text-transform: uppercase; font-size: 0.8rem; transition: 0.2s; }
+        .btn:hover { transform: translateY(-2px); }
+
+        .grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; }
+        .slot { height: 30px; border-radius: 4px; background: #333; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .slot.free { background: var(--accent); color: white; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+        .slot.busy { background: var(--danger); opacity: 0.6; }
+        .slot:hover { transform: scale(1.1); border: 1px solid white; }
+
+        .widget-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .kpi-card { background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; text-align: center; }
+        .kpi-val { font-size: 1.5rem; font-weight: 800; color: white; }
+        .kpi-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
+
+        .rec-card { background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05)); border: 1px solid var(--primary); border-radius: 16px; padding: 16px; margin-bottom: 15px; position: relative; }
+        .rec-title { font-size: 0.75rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; display: flex; justify-content: space-between; }
+        .rec-main { font-size: 1.1rem; font-weight: 800; color: white; margin-top: 8px; line-height: 1.2; }
+        .rec-sub { font-size: 0.7rem; color: #cbd5e1; margin-top: 4px; }
+        .confidence-badge { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; color: #fff; }
+
+        .filter-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; padding: 8px; border-radius: 6px; font-size: 0.65rem; cursor: pointer; text-align: center; font-weight: 600; }
+        .filter-btn:hover { background: rgba(255,255,255,0.1); }
+        .filter-btn.active { background: rgba(99, 102, 241, 0.2); color: var(--primary); border-color: var(--primary); }
+
+        .file-upload { border: 2px dashed var(--glass-border); border-radius: 10px; padding: 12px; text-align: center; cursor: pointer; font-size: 0.75rem; color: var(--text-muted); transition: 0.2s; background: rgba(255,255,255,0.02); }
+        .file-upload:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.1); color: white; }
+
+        .chart-box { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px; height: 140px; border: 1px solid var(--glass-border); margin-top: 10px; }
+
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="nav-dock">
+        <a href="index.html" class="nav-btn"><i class="fas fa-home"></i> HUB</a>
+        <a href="traffic.html" class="nav-btn"><i class="fas fa-route"></i> TRAFFIC</a>
+        <a href="parking.html" class="nav-btn active"><i class="fas fa-square-parking"></i> PARKING</a>
+    </div>
+
+    <div class="panel panel-left">
+        <h2><i class="fas fa-square-parking" style="color:var(--accent)"></i> PARKING CONTROL</h2>
+        
+        <h3>🚗 Parking Controls</h3>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <input type="text" id="p-dest" placeholder="Enter Destination (e.g. Connaught Place)">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <select id="p-radius">
+                    <option value="500">500m Radius</option>
+                    <option value="1000">1km Radius</option>
+                    <option value="2000">2km Radius</option>
+                </select>
+                <select id="p-type">
+                    <option value="car">Car (Std)</option>
+                    <option value="bike">Two-Wheeler</option>
+                    <option value="ev">EV (Charging)</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn" style="margin-top:10px;" onclick="parkingEngine.searchLocation()">
+            <i class="fas fa-search-location"></i> FIND PARKING
+        </button>
+
+        <h3 style="margin-top:20px;">📊 Smart Filters</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+            <div class="filter-btn active" onclick="this.classList.toggle('active')">Free Only</div>
+            <div class="filter-btn" onclick="this.classList.toggle('active')">Cheapest</div>
+            <div class="filter-btn" onclick="this.classList.toggle('active')">Nearest</div>
+            <div class="filter-btn" onclick="this.classList.toggle('active')">Predicted</div>
+        </div>
+
+        <h3 style="margin-top:20px;">🔄 Simulation</h3>
+        <div style="display:flex; gap:10px;">
+            <button class="btn" style="flex:1; background:rgba(255,255,255,0.1);" onclick="parkingEngine.simSensors()">Simulate</button>
+            <div class="file-upload" style="flex:1; margin:0;" onclick="document.getElementById('pCsv').click()">
+                <input type="file" id="pCsv" hidden onchange="alert('Parking Data Loaded')">
+                <i class="fas fa-upload"></i> CSV
+            </div>
+        </div>
+    </div>
+
+    <div class="panel panel-right">
+        <h2>AI PREDICTION</h2>
+        
+        <div class="rec-card" id="p-rec-card">
+            <div class="rec-title">
+                <span><i class="fas fa-brain"></i> AI Strategy</span>
+                <span class="confidence-badge">98% CONFIDENCE</span>
+            </div>
+            <div class="rec-main" id="p-rec-main">Analyzing...</div>
+            <div class="rec-sub" id="p-rec-sub">Processing sensor data...</div>
+        </div>
+
+        <div class="widget-row">
+            <div class="kpi-card"><div class="kpi-val" id="p-free" style="color:var(--accent)">0</div><div class="kpi-label">Available</div></div>
+            <div class="kpi-card"><div class="kpi-val" id="p-occ">0%</div><div class="kpi-label">Occupancy</div></div>
+        </div>
+
+        <h3 style="margin-top:15px;">Live Sensor Grid (Zone A)</h3>
+        <div class="grid-container" id="parkingGrid"></div>
+
+        <h3>Availability Forecast (30m)</h3>
+        <div class="chart-box"><canvas id="parkingChart"></canvas></div>
+        
+        <button class="btn" style="margin-top:15px; width:100%" onclick="parkingEngine.navigateToSpot()">
+            NAVIGATE TO NEAREST SLOT
+        </button>
+    </div>
+
+<script>
+    const GOOGLE_API_KEY = 'AIzaSyCRDIVgE8DZDEqY_lNhYmdo5rkiFXNGywI'; 
+    let map, pDir, pRen, geocoder, parkingChart;
+
+    function initApp() {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&callback=initMaps`;
+        script.async = true;
+        document.body.appendChild(script);
+        parkingEngine.init();
+    }
+
+    function initMaps() {
+        geocoder = new google.maps.Geocoder();
+        map = new google.maps.Map(document.getElementById("map"), {
+            zoom: 19, center: { lat: 28.6129, lng: 77.2295 }, mapTypeId: 'satellite', disableDefaultUI: true, tilt: 45
+        });
+        pDir = new google.maps.DirectionsService();
+        pRen = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: true, polylineOptions:{strokeColor:'#10b981', strokeWeight:4} });
+    }
+
+    const parkingEngine = {
+        spots: [], entrance: { lat: 28.6129, lng: 77.2295 }, markers: [],
+
+        init: function() { this.initChart(); this.createGrid(); setInterval(() => this.simSensors(), 2000); },
+
+        initChart: function() {
+            const ctx = document.getElementById('parkingChart').getContext('2d');
+            parkingChart = new Chart(ctx, { type: 'line', data: { labels: ['Now','+10m','+20m','+30m'], datasets: [{ label:'Free Slots', data:[5,4,2,6], borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.1)', fill:true }] }, options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#94a3b8'}}, y:{display:false}} } });
+        },
+
+        createGrid: function() {
+            this.spots = [];
+            // Clear existing map markers (simulated grid on map)
+            // In a real app, we'd render markers here. For visual clarity, we rely on the DOM Grid.
+            for(let i=0; i<20; i++) { 
+                const lat = this.entrance.lat + (Math.floor(i/5)*0.00015);
+                const lng = this.entrance.lng + ((i%5)*0.00015);
+                const status = Math.random()>0.5 ? 'free':'busy';
+                this.spots.push({ id: i, status: status, lat: lat, lng: lng }); 
+            } 
+            this.renderGrid();
+        },
+
+        searchLocation: function() {
+            const dest = document.getElementById('p-dest').value;
+            if(!dest) return alert("Please enter a destination");
+            
+            geocoder.geocode({ 'address': dest }, (results, status) => {
+                if (status === 'OK') {
+                    const loc = results[0].geometry.location;
+                    this.entrance = { lat: loc.lat(), lng: loc.lng() };
+                    map.setCenter(this.entrance);
+                    map.setZoom(19);
+                    
+                    // Put a marker
+                    new google.maps.Marker({ map: map, position: this.entrance, animation: google.maps.Animation.DROP });
+                    
+                    // Simulate new grid
+                    this.createGrid();
+                    alert(`Sensors active at: ${dest}`);
+                } else {
+                    alert('Geocode was not successful: ' + status);
+                }
+            });
+        },
+
+        renderGrid: function() {
+            const div = document.getElementById('parkingGrid'); div.innerHTML = "";
+            let freeCount = 0;
+            this.spots.forEach((s, i) => { 
+                if(s.status === 'free') freeCount++; 
+                const el = document.createElement('div'); el.className = `slot ${s.status}`; el.innerText = i+1; div.appendChild(el); 
+            });
+            document.getElementById('p-free').innerText = freeCount; document.getElementById('p-occ').innerText = Math.round(((20-freeCount)/20)*100) + "%";
+            this.updateRecCard(freeCount);
+        },
+
+        simSensors: function() { 
+            const idx = Math.floor(Math.random() * 20); 
+            this.spots[idx].status = this.spots[idx].status === 'free' ? 'busy' : 'free'; 
+            this.renderGrid(); 
+        },
+
+        updateRecCard: function(freeCount) {
+            const main = document.getElementById('p-rec-main'); const sub = document.getElementById('p-rec-sub'); const card = document.getElementById('p-rec-card');
+            if(freeCount < 3) { main.innerText = "High Congestion"; sub.innerText = "Spots filling rapidly. Arrive ASAP."; card.style.borderColor = "#ef4444"; card.style.background = "linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05))"; } 
+            else { main.innerText = "Optimal Window"; sub.innerText = "Low demand. Multiple spots available."; card.style.borderColor = "#10b981"; card.style.background = "linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05))"; }
+        },
+
+        navigateToSpot: function() {
+            const free = this.spots.find(s => s.status === 'free');
+            if(!free) return alert("Lot Full");
+            if(window.pLine) window.pLine.setMap(null);
+            window.pLine = new google.maps.Polyline({ path: [this.entrance, {lat: free.lat, lng: free.lng}], geodesic: true, strokeColor: '#10b981', strokeWeight: 4, map: map });
+            alert(`Guiding to Slot #${free.id + 1}`);
+        }
+    };
+
+    window.onload = initApp;
+</script>
+</body>
+</html>
