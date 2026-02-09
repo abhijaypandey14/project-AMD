@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CityOS | Smart Waste Command</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- ENTERPRISE THEME SYSTEM --- */
+        :root {
+            --bg-dark: #0b0e14;
+            --panel-bg: rgba(20, 25, 35, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --primary: #3b82f6;   /* Blue */
+            --success: #10b981;   /* Emerald */
+            --warning: #f59e0b;   /* Amber */
+            --danger: #ef4444;    /* Red */
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --font-ui: 'Inter', sans-serif;
+            --font-data: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            height: 100vh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- GLASSMORPHISM UTILS --- */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .scroll-hide::-webkit-scrollbar { display: none; }
+
+        /* --- TOP NAVBAR --- */
+        .top-nav {
+            height: 60px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px;
+            border-bottom: 1px solid var(--glass-border);
+            z-index: 100;
+        }
+
+        .brand {
+            display: flex; align-items: center; gap: 12px;
+            font-weight: 700; font-size: 1.1rem; letter-spacing: -0.5px;
+        }
+        .brand i { color: var(--success); }
+
+        .nav-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 8px; }
+        .tab {
+            padding: 8px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 500;
+            color: var(--text-muted); text-decoration: none; transition: 0.2s;
+        }
+        .tab:hover { color: white; background: rgba(255,255,255,0.05); }
+        .tab.active { background: var(--primary); color: white; box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3); }
+
+        .system-status { display: flex; gap: 20px; font-family: var(--font-data); font-size: 0.8rem; color: var(--text-muted); align-items: center; }
+        .live-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
+
+        /* --- MAIN LAYOUT --- */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr 340px;
+            height: calc(100vh - 90px); /* Minus header & footer */
+            gap: 0;
+        }
+
+        /* --- LEFT SIDEBAR (CONTROLS) --- */
+        .sidebar-left {
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 20px;
+            border-right: 1px solid var(--glass-border);
+            overflow-y: auto;
+        }
+
+        .control-group h3 {
+            font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted);
+            margin-bottom: 10px; letter-spacing: 1px; font-weight: 700;
+        }
+
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 8px;
+            font-weight: 600; font-size: 0.85rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: 0.2s; margin-bottom: 8px; color: white;
+        }
+        .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .btn-primary:hover { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+        
+        .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .btn-danger:hover { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+
+        .btn-outline { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-muted); }
+        .btn-outline:hover { background: rgba(255,255,255,0.1); color: white; }
+
+        /* Toggles & Inputs */
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.9rem; }
+        
+        input[type="checkbox"] { accent-color: var(--primary); transform: scale(1.2); cursor: pointer; }
+        
+        select, input[type="number"] {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
+            color: white; padding: 8px; border-radius: 6px; width: 100%; font-family: var(--font-data);
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--glass-border); border-radius: 8px;
+            padding: 20px; text-align: center; color: var(--text-muted);
+            font-size: 0.8rem; cursor: pointer; transition: 0.2s;
+        }
+        .upload-zone:hover { border-color: var(--primary); background: rgba(59, 130, 246, 0.1); }
+
+        /* --- CENTER MAP --- */
+        .map-container { position: relative; background: #1a1a1a; }
+        #map { width: 100%; height: 100%; }
+        
+        .map-overlay {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 6px;
+            color: #fff; font-size: 0.8rem; pointer-events: none;
+            backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* --- RIGHT SIDEBAR (ANALYTICS) --- */
+        .sidebar-right {
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 15px;
+            border-left: 1px solid var(--glass-border);
+            overflow-y: auto; background: rgba(15, 23, 42, 0.4);
+        }
+
+        .card {
+            background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 15px; position: relative;
+        }
+
+        .card-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+        
+        /* Priority Queue */
+        .bin-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
+        .bin-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.85rem;
+        }
+        .bin-item:last-child { border-bottom: none; }
+        .fill-badge { padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.75rem; color: #000; }
+        
+        /* AI Rec Card */
+        .ai-card { border: 1px solid var(--primary); background: linear-gradient(145deg, rgba(59, 130, 246, 0.1), rgba(0,0,0,0)); }
+        .ai-stat { font-family: var(--font-data); font-size: 0.9rem; margin-top: 4px; color: var(--text-main); }
+
+        /* Mini Grid */
+        .grid-visual { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 10px; }
+        .grid-cell { height: 12px; border-radius: 2px; background: #333; transition: 0.3s; }
+
+        /* Chart */
+        .chart-wrapper { height: 140px; width: 100%; }
+
+        /* Metrics Grid */
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .metric-box { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; text-align: center; }
+        .metric-val { font-family: var(--font-data); font-weight: 700; font-size: 1.1rem; }
+        .metric-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-top: 4px; }
+
+        /* --- BOTTOM STATUS BAR --- */
+        .bottom-bar {
+            height: 30px;
+            background: #050505;
+            border-top: 1px solid var(--glass-border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px;
+            font-family: var(--font-data); font-size: 0.75rem; color: var(--text-muted);
+        }
+        .status-item span { color: var(--text-main); font-weight: 700; }
+
+        /* Animations */
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        .flash-danger { animation: flashRed 1s infinite; }
+        @keyframes flashRed { 0% { background-color: var(--danger); } 50% { background-color: #7f1d1d; } 100% { background-color: var(--danger); } }
+
+    </style>
+</head>
+<body>
+
+    <nav class="top-nav glass-panel">
+        <div class="brand">
+            <i class="fas fa-city"></i> CityOS <span style="font-weight:300; color:var(--text-muted)">// WasteOps</span>
+        </div>
+        <div class="nav-tabs">
+            <a href="traffic.html" class="tab">Traffic</a>
+            <a href="parking.html" class="tab">Parking</a>
+            <a href="#" class="tab active">Waste</a>
+            <a href="#" class="tab">Energy</a>
+            <a href="#" class="tab">Admin</a>
+        </div>
+        <div class="system-status">
+            <i class="fas fa-bell"></i>
+            <span id="clock">12:00:00</span>
+            <div class="live-dot"></div>
+        </div>
+    </nav>
+
+    <div class="main-layout">
+        
+        <aside class="sidebar-left glass-panel scroll-hide">
+            
+            <div class="control-group">
+                <h3>Collection Command</h3>
+                <button class="btn btn-primary" onclick="wasteEngine.runOptimizer()">
+                    <i class="fas fa-route"></i> Run AI Optimization
+                </button>
+                <button class="btn btn-outline" onclick="wasteEngine.simulateDay()">
+                    <i class="fas fa-play"></i> Live Simulation
+                </button>
+                <button class="btn btn-danger" onclick="wasteEngine.emergencyPickup()">
+                    <i class="fas fa-ambulance"></i> Emergency Pickup
+                </button>
+            </div>
+
+            <div class="control-group">
+                <h3>View Filters</h3>
+                <div class="setting-row">
+                    <label>Show Truck Routes</label>
+                    <input type="checkbox" checked onchange="wasteEngine.toggleRoutes(this.checked)">
+                </div>
+                <div class="setting-row">
+                    <label>Show Predicted Overflow</label>
+                    <input type="checkbox" checked>
+                </div>
+                <div class="setting-row">
+                    <label>Show Empty Bins</label>
+                    <input type="checkbox" checked>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Fleet Settings</h3>
+                <div style="margin-bottom:10px;">
+                    <label style="font-size:0.8rem; color:#94a3b8;">Truck Count</label>
+                    <select id="truckCount">
+                        <option value="3">3 Units (Standard)</option>
+                        <option value="5">5 Units (Heavy Load)</option>
+                        <option value="8">8 Units (Max)</option>
+                    </select>
+                </div>
+                <div style="margin-bottom:10px;">
+                    <label style="font-size:0.8rem; color:#94a3b8;">Forecast Horizon</label>
+                    <select>
+                        <option>6 Hours</option>
+                        <option selected>12 Hours</option>
+                        <option>24 Hours</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Data Ingestion</h3>
+                <div class="upload-zone" onclick="wasteEngine.uploadData()">
+                    <i class="fas fa-cloud-upload-alt" style="font-size:1.5rem; margin-bottom:5px;"></i><br>
+                    Drop CSV Manifest or Click to Upload
+                </div>
+                <button class="btn btn-outline" style="margin-top:10px; font-size:0.7rem;" onclick="wasteEngine.resetSystem()">
+                    <i class="fas fa-undo"></i> Reset Day
+                </button>
+            </div>
+
+        </aside>
+
+        <main class="map-container">
+            <div id="map"></div>
+            <div class="map-overlay">
+                <i class="fas fa-satellite"></i> Satellite Feed • Lat: 28.63 • Lng: 77.21
+            </div>
+        </main>
+
+        <aside class="sidebar-right scroll-hide">
+            
+            <div class="card ai-card">
+                <div class="card-title">
+                    <span style="color:var(--primary)"><i class="fas fa-brain"></i> AI ROUTE PLAN</span>
+                    <span style="font-size:0.7rem; background:rgba(59,130,246,0.2); padding:2px 6px; border-radius:4px;">OPTIMIZED</span>
+                </div>
+                <div class="ai-stat"><i class="fas fa-truck"></i> Truck #4 & #2 Assigned</div>
+                <div class="ai-stat"><i class="fas fa-road"></i> Distance: <b>14.2 km</b></div>
+                <div class="ai-stat"><i class="fas fa-clock"></i> Est. Time: <b>42 min</b></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">PRIORITY BINS (>80%) <i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i></div>
+                <ul class="bin-list" id="priorityList">
+                    </ul>
+            </div>
+
+            <div class="card">
+                <div class="card-title">FILL LEVEL FORECAST</div>
+                <div class="chart-wrapper">
+                    <canvas id="fillChart"></canvas>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-val" style="color:var(--success)">-18%</div>
+                    <div class="metric-lbl">Fuel Saved</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-val" style="color:var(--primary)">1.2T</div>
+                    <div class="metric-lbl">CO₂ Reduced</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-val">₹4.5k</div>
+                    <div class="metric-lbl">Cost Saved</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-val" style="color:var(--warning)">0</div>
+                    <div class="metric-lbl">Overflows</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">ZONE HEATMAP</div>
+                <div class="grid-visual" id="miniGrid">
+                    </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <footer class="bottom-bar">
+        <div class="status-item">TOTAL BINS: <span id="statTotal">20</span></div>
+        <div class="status-item">CRITICAL: <span id="statCritical" style="color:var(--danger)">0</span></div>
+        <div class="status-item">TRUCKS ACTIVE: <span id="statTrucks" style="color:var(--primary)">3</span></div>
+        <div class="status-item">COLLECTIONS: <span id="statCollections">12</span></div>
+        <div class="status-item">EFFICIENCY: <span id="statEff" style="color:var(--success)">94%</span></div>
+    </footer>
+
+    <script>
+        const GOOGLE_API_KEY = 'AIzaSyCRDIVgE8DZDEqY_lNhYmdo5rkiFXNGywI'; // Use your key
+        const CENTER = { lat: 28.6304, lng: 77.2177 }; // Connaught Place
+        let map, chart, routeLine;
+        let bins = [];
+        let trucks = [];
+
+        function initApp() {
+            // Clock
+            setInterval(() => {
+                document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+            }, 1000);
+
+            // Load Google Maps
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&callback=initMap`;
+            script.async = true;
+            document.body.appendChild(script);
+
+            // Init Chart
+            wasteEngine.initChart();
+        }
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 16,
+                center: CENTER,
+                mapTypeId: 'satellite',
+                disableDefaultUI: true,
+                styles: [
+                    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+                    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+                    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] }
+                ]
+            });
+            wasteEngine.generateData();
+        }
+
+        const wasteEngine = {
+            generateData: function() {
+                bins = [];
+                // Generate 20 random bins
+                for(let i=0; i<20; i++) {
+                    const lat = CENTER.lat + (Math.random() - 0.5) * 0.01;
+                    const lng = CENTER.lng + (Math.random() - 0.5) * 0.01;
+                    const fill = Math.floor(Math.random() * 60); // Start 0-60%
+                    
+                    const marker = new google.maps.Marker({
+                        position: { lat, lng },
+                        map: map,
+                        icon: this.getBinIcon(fill),
+                        title: `Bin #${i+1}`
+                    });
+
+                    // Add click listener for popup
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `<div style="color:black; font-family:sans-serif;"><b>Bin #${i+1}</b><br>Fill: ${fill}%<br>Type: General</div>`
+                    });
+                    marker.addListener("click", () => {
+                        infoWindow.open(map, marker);
+                    });
+
+                    bins.push({ id: i+1, lat, lng, fill, marker });
+                }
+                this.updateDashboard();
+            },
+
+            simulateDay: function() {
+                // Increase fill levels
+                bins.forEach(b => {
+                    b.fill = Math.min(100, b.fill + Math.floor(Math.random() * 25));
+                    b.marker.setIcon(this.getBinIcon(b.fill));
+                });
+                this.updateDashboard();
+                this.updateChart(true);
+            },
+
+            runOptimizer: function() {
+                const targets = bins.filter(b => b.fill >= 70);
+                if(targets.length === 0) return alert("System Efficient: No collections needed.");
+
+                // Create Route Polyline
+                const path = [CENTER];
+                targets.forEach(t => path.push({lat: t.lat, lng: t.lng}));
+                path.push(CENTER);
+
+                if(routeLine) routeLine.setMap(null);
+                routeLine = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: "#3b82f6",
+                    strokeOpacity: 1.0,
+                    strokeWeight: 4,
+                    map: map
+                });
+
+                // Simulate Truck
+                const truckMarker = new google.maps.Marker({
+                    position: CENTER,
+                    map: map,
+                    icon: {
+                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                        scale: 6, fillColor: "white", fillOpacity: 1, strokeWeight: 2
+                    }
+                });
+
+                alert(`Route Optimized for ${targets.length} bins. Dispatching Truck #4.`);
+                
+                // Update stats
+                document.getElementById('statCollections').innerText = parseInt(document.getElementById('statCollections').innerText) + targets.length;
+            },
+
+            emergencyPickup: function() {
+                // Find highest bin and collect
+                const critical = bins.sort((a,b) => b.fill - a.fill)[0];
+                if(critical) {
+                    map.panTo(critical.marker.getPosition());
+                    map.setZoom(18);
+                    critical.fill = 0;
+                    critical.marker.setIcon(this.getBinIcon(0));
+                    this.updateDashboard();
+                    alert(`Emergency Crew dispatched to Bin #${critical.id}`);
+                }
+            },
+
+            uploadData: function() {
+                alert("Simulating CSV Upload...\nParsed 150 rows.\nUpdating historic trends.");
+            },
+
+            resetSystem: function() {
+                bins.forEach(b => {
+                    b.fill = 0;
+                    b.marker.setIcon(this.getBinIcon(0));
+                });
+                if(routeLine) routeLine.setMap(null);
+                this.updateDashboard();
+                this.updateChart(false);
+            },
+
+            toggleRoutes: function(show) {
+                if(routeLine) routeLine.setMap(show ? map : null);
+            },
+
+            // --- UI HELPERS ---
+            updateDashboard: function() {
+                // Update Priority List
+                const list = document.getElementById('priorityList');
+                list.innerHTML = "";
+                const miniGrid = document.getElementById('miniGrid');
+                miniGrid.innerHTML = "";
+                
+                let criticalCount = 0;
+
+                bins.sort((a,b) => b.fill - a.fill).forEach(b => {
+                    // Update Grid
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    
+                    let color = '#10b981';
+                    if(b.fill >= 40) color = '#f59e0b';
+                    if(b.fill >= 75) { color = '#ef4444'; criticalCount++; }
+                    
+                    cell.style.backgroundColor = color;
+                    miniGrid.appendChild(cell);
+
+                    // Update List if critical
+                    if(b.fill >= 70) {
+                        const li = document.createElement('li');
+                        li.className = 'bin-item';
+                        li.innerHTML = `
+                            <span><i class="fas fa-trash"></i> Bin #${b.id}</span>
+                            <span class="fill-badge" style="background:${color}">${b.fill}%</span>
+                        `;
+                        list.appendChild(li);
+                    }
+                });
+
+                if(list.innerHTML === "") list.innerHTML = "<div style='padding:10px; text-align:center; color:#555'>No critical alerts</div>";
+
+                document.getElementById('statCritical').innerText = criticalCount;
+            },
+
+            getBinIcon: function(fill) {
+                let color = '#10b981'; // Green
+                if(fill >= 40) color = '#f59e0b'; // Yellow
+                if(fill >= 75) color = '#ef4444'; // Red
+                
+                return {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    fillColor: color,
+                    fillOpacity: 0.9,
+                    scale: 8,
+                    strokeColor: 'white',
+                    strokeWeight: 2
+                };
+            },
+
+            initChart: function() {
+                const ctx = document.getElementById('fillChart').getContext('2d');
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                        datasets: [{
+                            label: 'Avg Fill Level %',
+                            data: [10, 15, 35, 50, 65, 80],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }, {
+                            label: 'Predicted',
+                            data: [10, 15, 35, 55, 75, 95],
+                            borderColor: '#ef4444',
+                            borderDash: [5, 5],
+                            tension: 0.4,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { display: false, min: 0, max: 100 },
+                            x: { ticks: { color: '#64748b', fontSize: 10 }, grid: { display: false } }
+                        }
+                    }
+                });
+            },
+
+            updateChart: function(isSim) {
+                const data = chart.data.datasets[0].data;
+                const pred = chart.data.datasets[1].data;
+                
+                // Shift data for simulation effect
+                if(isSim) {
+                    const last = data[data.length-1];
+                    data.shift();
+                    data.push(Math.min(100, last + 10));
+                    
+                    pred.shift();
+                    pred.push(Math.min(100, last + 25));
+                } else {
+                    // Reset
+                    chart.data.datasets[0].data = [10, 15, 35, 50, 65, 80];
+                }
+                chart.update();
+            }
+        };
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
